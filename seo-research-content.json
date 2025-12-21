@@ -1,0 +1,372 @@
+{
+    "name": "seo-research-content",
+    "nodes": [
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.manualTrigger",
+            "typeVersion": 1,
+            "position": [
+                -1600,
+                -560
+            ],
+            "id": "manual-trigger",
+            "name": "When clicking ‘Execute workflow’"
+        },
+        {
+            "parameters": {
+                "q": "={{ $json['Search Query'] }}",
+                "location": "={{ $json.Location }}",
+                "additionalFields": {
+                    "google_domain": "google.com",
+                    "gl": "us",
+                    "hl": "en",
+                    "num": "10"
+                },
+                "requestOptions": {}
+            },
+            "type": "n8n-nodes-serpapi.serpApi",
+            "typeVersion": 1,
+            "position": [
+                -1152,
+                -656
+            ],
+            "id": "google-search",
+            "name": "Google search",
+            "credentials": {
+                "serpApi": {
+                    "id": "serpapi-cred-id",
+                    "name": "SerpAPI"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "documentId": {
+                    "__rl": true,
+                    "value": "YOUR_GOOGLE_SHEET_ID",
+                    "mode": "list"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "gid=0",
+                    "mode": "list"
+                },
+                "filtersUI": {
+                    "values": [
+                        {
+                            "lookupColumn": "Status",
+                            "lookupValue": "Pending"
+                        }
+                    ]
+                },
+                "options": {
+                    "returnFirstMatch": true
+                }
+            },
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.7,
+            "position": [
+                -1376,
+                -560
+            ],
+            "id": "google-sheets-get",
+            "name": "Get row(s) in sheet",
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "google-sheets-cred-id",
+                    "name": "Google Sheets"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "operation": "youtube",
+                "search_query": "={{ $('Get row(s) in sheet').item.json['Search Query'] }}",
+                "additionalFields": {
+                    "gl": "us",
+                    "hl": "en"
+                },
+                "requestOptions": {}
+            },
+            "type": "n8n-nodes-serpapi.serpApi",
+            "typeVersion": 1,
+            "position": [
+                -1152,
+                -464
+            ],
+            "id": "youtube-search",
+            "name": "Youtube search",
+            "credentials": {
+                "serpApi": {
+                    "id": "serpapi-cred-id",
+                    "name": "SerpAPI"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+            "typeVersion": 1,
+            "position": [
+                -400,
+                -336
+            ],
+            "id": "gemini-chat-model",
+            "name": "Google Gemini Chat Model",
+            "credentials": {
+                "googlePalmApi": {
+                    "id": "gemini-cred-id",
+                    "name": "Gemini API"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "promptType": "define",
+                "text": "=# INPUT DATA \nTopic: {{ $json.topic }} \nConsolidated SERP Data: {{ $json.consolidated_serp }}",
+                "messages": {
+                    "messageValues": [
+                        {
+                            "message": "You are a YouTube Content Strategy Analyst. Your job is to analyze SERP (Search Engine Results Page) data and provide actionable insights for a YouTube creator.\n\nYou will receive:\n- A search topic/query\n- Consolidated SERP data containing Google organic results and YouTube video results\n\nAnalyze this data through 9 metrics organized into 3 tiers, then synthesize a final Verdict.\n\n---\n\n### TIER 1: OPPORTUNITY SIGNALS\nAnswer: \"Should I make this video?\"\n\n1. **Video Deficit Score**\n   - Calculate: google.total_results / youtube.total_results\n   - Thresholds: >100 (green_light), 10-100 (caution), <10 (saturated)\n\n2. **Distress Signal**\n   - Scan Google results for: reddit, forum, stackoverflow, quora\n   - Thresholds: Position 1-3 (high), Position 4-10 (medium), None (low)\n\n3. **David vs Goliath Score**\n   - Count YouTube videos in top 10 with <10,000 views\n   - Thresholds: 4+ (high), 2-3 (medium), 0-1 (low)\n\n### TIER 2: POSITIONING\nAnswer: \"What angle should I take?\"\n\n4. **Implementation Gap**\n   - Scan titles for: tutorial, guide, step-by-step, build, workflow\n   - Thresholds: 0-33% implementation terms (low - high opportunity), 34-66% (medium), 67-100% (high - saturated)\n\n5. **Authority Dominance**\n   - Classify Google results: Enterprise (Consulting/News), Tool (SaaS/Vendor), Peer (Reddit/Blog), How-to\n   - Calculate: (Enterprise + Tool) / (Peer + How-to + 1)\n   - Thresholds: >3 (enterprise_heavy), 1-3 (mixed), <1 (peer_heavy)\n\n6. **Topic Freshness**\n   - Calc avg age of top 5 YT videos.\n   - Thresholds: <60 days (fresh), 60-180 (moderate), >180 (stale)\n\n7. **Contrarian Potential**\n   - Analyze sentiment. Is it all \"hype\" and positive?\n   - Thresholds: >80% positive (high opportunity for contrarian), 50-80% (medium), Mixed/Negative (low)\n\n### TIER 3: EXECUTION\nAnswer: \"How should I package this video?\"\n\n8. **Velocity Signal**\n   - Identify the video with highest views per day.\n   - Note its format (tutorial, vlog, etc), title, and length.\n\n9. **Format Void**\n   - Check lengths: Short (<3m), Medium (3-15m), Long (15-45m), Masterclass (>45m).\n   - Identify which has 0 or fewest videos.\n\n---\n\n### **OUTPUT FORMAT INSTRUCTIONS**\nYou must output your analysis using the **exact format below**. Do not deviate. Ensure every bullet point starts with a hyphen `-` and the keys are bolded `**Key:**`.\n\n[START OF TEMPLATE]\n\n## TIER 1: OPPORTUNITY SIGNALS\n\n### 1. Video Deficit Score\n- **Calculation:** [Insert calculation here]\n- **Signal:** [green_light / caution / saturated]\n\n### 2. Distress Signal\n- **Level:** [high / medium / low]\n- **Evidence:** [One sentence evidence]\n\n### 3. David vs Goliath Score\n- **Level:** [high / medium / low]\n- **Evidence:** [One sentence evidence]\n\n**Tier Summary:** [One sentence summary of Tier 1]\n\n## TIER 2: POSITIONING\n\n### 4. Implementation Gap\n- **Level:** [high / medium / low]\n- **Recommendation:** [One sentence recommendation]\n\n### 5. Authority Dominance\n- **Type:** [enterprise_heavy / mixed / peer_heavy]\n- **Recommendation:** [One sentence recommendation]\n\n### 6. Topic Freshness\n- **Status:** [fresh / moderate / stale]\n- **Average Age:** [e.g. 120 days]\n\n### 7. Contrarian Potential\n- **Opportunity:** [high / medium / low]\n- **Suggested Angle:** [One sentence angle]\n\n**Tier Summary:** [One sentence summary of Tier 2]\n\n## TIER 3: EXECUTION\n\n### 8. Velocity Signal\n- **Winning Format:** [e.g. Tutorial / Vlog]\n- **Top Video:** [Video Title]\n- **Length:** [e.g. 10:25]\n\n### 9. Format Void\n- **Void:** [e.g. Shorts / Masterclass]\n- **Suggestion:** [One sentence suggestion]\n\n**Tier Summary:** [One sentence summary of Tier 3]\n\n---\n\n## VERDICT\n\n- **make_video:** [true / false]\n- **confidence:** [1-10]\n- **recommended_title_angle:** [Title string]\n- **recommended_format:** [Format string]\n- **reasoning:** [2 sentences]\n\n[END OF TEMPLATE]"
+                        }
+                    ]
+                },
+                "batching": {}
+            },
+            "type": "@n8n/n8n-nodes-langchain.chainLlm",
+            "typeVersion": 1.7,
+            "position": [
+                -480,
+                -560
+            ],
+            "id": "data-analyst",
+            "name": "Data Analyst"
+        },
+        {
+            "parameters": {},
+            "type": "n8n-nodes-base.merge",
+            "typeVersion": 3.2,
+            "position": [
+                -928,
+                -560
+            ],
+            "id": "merge-node",
+            "name": "Merge"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Loop over input items to separate Google and YouTube results\nconst googleResults = items.find(item => item.json.search_parameters && item.json.search_parameters.engine === 'google');\nconst youtubeResults = items.find(item => item.json.search_parameters && item.json.search_parameters.engine === 'youtube');\n\n// Dynamically extract the topic from the search parameters\n// We prefer the Google query 'q', but fall back to YouTube 'search_query' if needed\nlet topic = \"Unknown Topic\";\nif (googleResults && googleResults.json.search_parameters.q) {\n  topic = googleResults.json.search_parameters.q;\n} else if (youtubeResults && youtubeResults.json.search_parameters.search_query) {\n  topic = youtubeResults.json.search_parameters.search_query;\n}\n\n// Prepare the consolidated data object\nconst consolidatedData = {\n  topic: topic,\n  google: {\n    total_results: googleResults ? googleResults.json.search_information.total_results : 0,\n    organic_results: googleResults ? googleResults.json.organic_results : [],\n    // You can add more Google fields here if needed\n  },\n  youtube: {\n    total_results: youtubeResults ? youtubeResults.json.search_information.total_results : 0,\n    video_results: youtubeResults ? youtubeResults.json.video_results : [],\n    shorts_results: youtubeResults ? youtubeResults.json.shorts_results : []\n  },\n  google_total: googleResults ? googleResults.json.search_information.total_results : 0,\n  youtube_total: youtubeResults ? youtubeResults.json.search_information.total_results : 0\n};\n\n// Return the data in the specific format requested\n// Note: We stringify 'consolidated_serp' because your output example showed it as a string\nreturn [\n  {\n    json: {\n      topic: topic,\n      consolidated_serp: JSON.stringify(consolidatedData, null, 2)\n    }\n  }\n];"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -704,
+                -560
+            ],
+            "id": "code-node-js",
+            "name": "Code in JavaScript"
+        },
+        {
+            "parameters": {
+                "jsCode": "const results = [];\n// Ensure 'Get row(s) in sheet' is the correct node name in your workflow\nconst sourceItems = $('Get row(s) in sheet').all(); \n\nfor (const item of items) {\n  const text = item.json.text || \"\";\n  \n  // Link back to original row\n  const sourceItem = sourceItems[item.index] || sourceItems[0];\n  const rowNum = sourceItem.json.row_number || \"\"; \n  const searchQuery = sourceItem.json[\"Search Query\"] || sourceItem.json.topic || \"Unknown\";\n\n  // ----------------------------------------------------------------------\n  // 1. UNIVERSAL FIELD EXTRACTOR\n  // ----------------------------------------------------------------------\n  const getSubField = (sectionNum, fieldLabelRegex) => {\n    const pattern = `### ${sectionNum}\\\\.[\\\\s\\\\S]*?(?:\\\\*|\\\\-)\\\\s*(?:\\\\*\\\\*)?(${fieldLabelRegex})(?:\\\\*\\\\*)?:\\\\s*(.*)`;\n    const regex = new RegExp(pattern, \"i\");\n    const match = text.match(regex);\n    \n    if (match && match[2]) {\n      // Clean up the result (remove trailing markdown like quotes or brackets)\n      return match[2].split('\\n')[0].replace(/[`\"()]/g, '').trim();\n    }\n    return \"\";\n  };\n\n  // ----------------------------------------------------------------------\n  // 2. UNIVERSAL TIER SUMMARY EXTRACTOR\n  // ----------------------------------------------------------------------\n  const getTierSummary = (tierNum) => {\n    const sections = text.split(/\\*\\*\\s*Tier\\s*\\d*\\s*Summary:\\s*\\*\\*/i);\n    \n    if (sections[tierNum]) {\n      let content = sections[tierNum];\n      // Cut off at the next major section (---, ## VERDICT, or ## TIER)\n      content = content.split(/---|##\\s*VERDICT|##\\s*TIER/i)[0];\n      return content.trim();\n    }\n    return \"\";\n  };\n\n  // ----------------------------------------------------------------------\n  // 3. UNIVERSAL VERDICT EXTRACTOR\n  // ----------------------------------------------------------------------\n  const getVerdict = (key) => {\n    const regex = new RegExp(`(?:\\\\*|\\\\-)\\\\s*\\\\*\\\\*${key}:\\\\*\\\\*\\\\s*(.*)`, \"i\");\n    const match = text.match(regex);\n    return match ? match[1].replace(/[`\"()]/g, '').trim() : \"\";\n  };\n\n  results.push({\n    json: {\n      \"row_number\": rowNum,\n      \"search_query\": searchQuery,\n      \n      \"tier1_opportunity\": {\n        \"video_deficit\": { \n            \"ratio\": getSubField(1, \"(?:Ratio|Calculation)\").replace('~', ''), \n            \"signal\": getSubField(1, \"Signal\") \n        },\n        \"distress_signal\": { \"level\": getSubField(2, \"Level\"), \"evidence\": getSubField(2, \"Evidence\") },\n        \"david_vs_goliath\": { \"level\": getSubField(3, \"(?:Level|Count)\"), \"evidence\": getSubField(3, \"Evidence\") },\n        \"tier_summary\": getTierSummary(1)\n      },\n\n      \"tier2_positioning\": {\n        \"implementation_gap\": { \"level\": getSubField(4, \"Level\"), \"recommendation\": getSubField(4, \"Recommendation\") },\n        \"authority_dominance\": { \"type\": getSubField(5, \"Type\"), \"recommendation\": getSubField(5, \"Recommendation\") },\n        \"topic_freshness\": { \"status\": getSubField(6, \"Status\"), \"avg_age_days\": getSubField(6, \"Average Age\").replace(/\\D/g, '') },\n        \"contrarian_potential\": { \"opportunity\": getSubField(7, \"Opportunity\"), \"suggested_angle\": getSubField(7, \"Suggested Angle\") },\n        \"tier_summary\": getTierSummary(2)\n      },\n\n      \"tier3_execution\": {\n        \"velocity_signal\": { \n            \"winning_format\": getSubField(8, \"Winning Format\"), \n            \"top_video_title\": getSubField(8, \"Top Video(?: Title)?\"), \n            \"top_video_length\": getSubField(8, \"(?:Top Video )?Length\") \n        },\n        \"format_void\": { \"missing\": getSubField(9, \"(?:Category )?Void\"), \"suggestion\": getSubField(9, \"Suggestion\") },\n        // Metric 10 (Money Shot) removed here\n        \"tier_summary\": getTierSummary(3)\n      },\n\n      \"verdict\": {\n        \"make_video\": getVerdict(\"make_video\") === 'true',\n        \"confidence\": parseFloat(getVerdict(\"confidence\")),\n        \"recommended_title_angle\": getVerdict(\"recommended_title_angle\"),\n        \"recommended_format\": getVerdict(\"recommended_format\"),\n        \"reasoning\": getVerdict(\"reasoning\")\n      }\n    }\n  });\n}\n\nreturn results;"
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -128,
+                -560
+            ],
+            "id": "code-node-js-parser",
+            "name": "Code in JavaScript1"
+        },
+        {
+            "parameters": {
+                "operation": "update",
+                "documentId": {
+                    "__rl": true,
+                    "value": "YOUR_GOOGLE_SHEET_ID",
+                    "mode": "list"
+                },
+                "sheetName": {
+                    "__rl": true,
+                    "value": "gid=0",
+                    "mode": "list"
+                },
+                "columns": {
+                    "mappingMode": "defineBelow",
+                    "value": {
+                        "Status": "Complete",
+                        "Date": "={{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
+                        "Reasoning": "={{ $json.verdict.reasoning }}",
+                        "row_number": "={{ $json.row_number }}",
+                        "Video Deficit": "=Ratio:{{ $json.tier1_opportunity.video_deficit.ratio }} \nSignal:{{ $json.tier1_opportunity.video_deficit.signal }}",
+                        "Distress Signal": "=Level:{{ $json.tier1_opportunity.distress_signal.level }} \nEvidence:{{ $json.tier1_opportunity.distress_signal.evidence }}",
+                        "David vs. Goliath": "=Level:{{ $json.tier1_opportunity.david_vs_goliath.level }} \nEvidence:{{ $json.tier1_opportunity.david_vs_goliath.evidence }}",
+                        "Tier 1 Summary": "={{ $json.tier1_opportunity.tier_summary }}",
+                        "Implementation Gap": "=Level:{{ $json.tier2_positioning.implementation_gap.level }} \nRecommendation: {{ $json.tier2_positioning.implementation_gap.recommendation }}",
+                        "Authority Dominance": "=Type:{{ $json.tier2_positioning.authority_dominance.type }} \nRecommendation:{{ $json.tier2_positioning.authority_dominance.recommendation }}",
+                        "Topic Freshness": "=Status:{{ $json.tier2_positioning.topic_freshness.status }} \nAverage Age Days:{{ $json.tier2_positioning.topic_freshness.avg_age_days }}",
+                        "Contratian Potential": "=Opportunity:{{ $json.tier2_positioning.contrarian_potential.opportunity }} \nSuggested Angle:{{ $json.tier2_positioning.contrarian_potential.suggested_angle }}",
+                        "Tier 2 Summary": "={{ $json.tier2_positioning.tier_summary }}",
+                        "Velocity Signal": "=Winning Format:{{ $json.tier3_execution.velocity_signal.winning_format }} \nTop Video Title:{{ $json.tier3_execution.velocity_signal.top_video_title }} \nTop Video Length:{{ $json.tier3_execution.velocity_signal.top_video_length }}",
+                        "Format Void": "=Missing:{{ $json.tier3_execution.format_void.missing }} \nSuggestion:{{ $json.tier3_execution.format_void.suggestion }}",
+                        "Tier 3 Summary": "={{ $json.tier3_execution.tier_summary }}",
+                        "Verdict": "=Make Video:{{ $json.verdict.make_video }}",
+                        "Confidence": "={{ $json.verdict.confidence }}/10",
+                        "Title": "={{ $json.verdict.recommended_title_angle }}",
+                        "Format": "={{ $json.verdict.recommended_format }}"
+                    },
+                    "matchingColumns": [
+                        "row_number"
+                    ],
+                    "schema": [
+                        {
+                            "id": "Status",
+                            "displayName": "Status",
+                            "required": false,
+                            "defaultMatch": false,
+                            "display": true,
+                            "type": "string",
+                            "canBeUsedToMatch": true,
+                            "removed": false
+                        }
+                    ],
+                    "attemptToConvertTypes": false,
+                    "convertFieldsToString": false
+                },
+                "options": {}
+            },
+            "type": "n8n-nodes-base.googleSheets",
+            "typeVersion": 4.7,
+            "position": [
+                80,
+                -560
+            ],
+            "id": "google-sheets-update",
+            "name": "Update row in sheet1",
+            "credentials": {
+                "googleSheetsOAuth2Api": {
+                    "id": "google-sheets-cred-id",
+                    "name": "Google Sheets"
+                }
+            }
+        }
+    ],
+    "pinData": {},
+    "connections": {
+        "When clicking ‘Execute workflow’": {
+            "main": [
+                [
+                    {
+                        "node": "Get row(s) in sheet",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get row(s) in sheet": {
+            "main": [
+                [
+                    {
+                        "node": "Google search",
+                        "type": "main",
+                        "index": 0
+                    },
+                    {
+                        "node": "Youtube search",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Google search": {
+            "main": [
+                [
+                    {
+                        "node": "Merge",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Youtube search": {
+            "main": [
+                [
+                    {
+                        "node": "Merge",
+                        "type": "main",
+                        "index": 1
+                    }
+                ]
+            ]
+        },
+        "Google Gemini Chat Model": {
+            "ai_languageModel": [
+                [
+                    {
+                        "node": "Data Analyst",
+                        "type": "ai_languageModel",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Merge": {
+            "main": [
+                [
+                    {
+                        "node": "Code in JavaScript",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Code in JavaScript": {
+            "main": [
+                [
+                    {
+                        "node": "Data Analyst",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Data Analyst": {
+            "main": [
+                [
+                    {
+                        "node": "Code in JavaScript1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Code in JavaScript1": {
+            "main": [
+                [
+                    {
+                        "node": "Update row in sheet1",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "active": false,
+    "settings": {
+        "executionOrder": "v1"
+    },
+    "meta": {
+        "templateCredsSetupCompleted": true
+    },
+    "tags": []
+}
