@@ -47,3 +47,5 @@ This workflow performs the following:
 ## 📄 License
 
 MIT
+
+**Related workflow:** [`seo_research_n8n`](https://github.com/lucasbarnes96/seo_research_n8n) shares the manual Google/YouTube search inputs and Google Sheets output, with an additional `Content Strategist` stage and processing path. This export uses a single `Data Analyst` stage. These notes describe the checked-in workflow exports; runtime activation in n8n was not verified.
